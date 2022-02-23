@@ -101,11 +101,12 @@ void* consumer_func(void* threadid){
 
 
 int main(){
-	
+        // Defined mutex and semaphores	
 	pthread_mutex_init(&mutex,NULL);
 	sem_init(&empty,0,4);
 	sem_init(&full,0,0);
 
+	// Initialization of message queues, one for producers and one for consumers 
 	int msg_id_prod, msg_id_cons;
 	key_t key_prod, key_cons;
 	key_cons = ftok("consumer_file", 15);
@@ -113,19 +114,33 @@ int main(){
         msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 
+	// array of Threads for producers and consumers 
 	pthread_t prod_threads[4];
 	pthread_t cons_threads[4];
 	int i;
+
+	// Creation of threads
 	for(i = 0; i < 4; i++){
-		pthread_create(&prod_threads[i], NULL, producer_func, (void *)i);
-		pthread_create(&cons_threads[i], NULL, consumer_func,(void *)i);
+		pthread_create(&prod_threads[i], NULL, producer_func, (void *)(i+1));
+	}
+
+	for(i = 0; i < 4; i++){
+		pthread_create(&cons_threads[i], NULL, consumer_func,(void *)(i+1));
 	}
 
 	for(i = 0; i < 4; i++){
 		pthread_join(prod_threads[i], NULL);
-		pthread_join(cons_threads[i], NULL);
 	}
-	 
+
+	for(i = 0; i < 4; i++){
+	       pthread_join(cons_threads[i], NULL);
+      	}	       
+	
+	// Destroying the mutex, semaphore variables and the message queues
+	pthread_mutex_destroy(&mutex);
+	sem_destroy(&empty);
+	sem_destroy(&full);
+
 	msgctl(msg_id_cons, IPC_RMID, NULL);
 	msgctl(msg_id_prod, IPC_RMID, NULL);
 	return 0;
