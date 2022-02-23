@@ -30,10 +30,10 @@ void* producer_func(void* threadid){
 			printf("Error receiving message from consumer\n");
 			exit(EXIT_FAILURE);
 		}
-		printf("%lu: Resource request received from consumer\n",pthread_self()%10000);	
+		printf("Producer-%lu(%d): Resource request received from consumer %s\n",pthread_self()%10000,tid,message_cons.mesg_text);	
 		
 		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"Message from producer - %d, Thread ID - %lu\n",tid,pthread_self()%10000);
-		printf("%lu: Sending acknowledgement\n",pthread_self()%10000);
+		printf("Producer-%lu(%d): Sending acknowledgement\n",pthread_self()%10000,tid);
 
 		if(msgsnd(msg_id_prod, &message_prod, sizeof(message_prod), 0) < 0){
 			printf("Error sending message to the consumer\n");
@@ -60,25 +60,25 @@ void* consumer_func(void* threadid){
         msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 
-        snprintf(message_cons.mesg_text,sizeof(message_cons.mesg_text),"");
+        snprintf(message_cons.mesg_text,sizeof(message_cons.mesg_text),"%lu",pthread_self()%10000);
 
-        for(i = 0; i < 4; i++){
-                if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
-                        printf("Error sending message to producer\n");
-                        exit(EXIT_FAILURE);
-                }
+        if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
+               printf("Error sending message to producer\n");
+               exit(EXIT_FAILURE);
         }
 
+        printf("Consumer-%lu(%d): Resource request sent\n",pthread_self()%10000,tid);
+
 	while(1){
-        	printf("Consumer %d is trying to receieve messages and print it. Thread ID - %lu\n",tid,pthread_self()%10000);
+        	printf("Consumer-%lu(%d): Waiting for resource\n",pthread_self()%10000,tid);
         	if(msgrcv(msg_id_prod, &message_prod, sizeof(message_prod),1, 0) < 0 ){
         		fprintf(stderr,"Error receiving the message from producer\n");
 			exit(EXIT_FAILURE);
 		}
 
-		printf("Resource received from producer - %s\n",message_prod.mesg_text);
+		printf("Consumer-%lu(%d): Resource received from producer and hence printing the message - %s\n",pthread_self()%10000,tid,message_prod.mesg_text);
 		
-		printf("Consume - %lu: Sending another request\n",pthread_self()%10000);
+		printf("Consumer-%lu(%d): Sending another request\n",pthread_self()%10000,tid);
 		if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
                         printf("Error sending message to producer\n");
                         exit(EXIT_FAILURE);
@@ -89,7 +89,7 @@ void* consumer_func(void* threadid){
 
 
 int main(){
-
+	
 	int msg_id_prod, msg_id_cons;
 	key_t key_prod, key_cons;
 	key_cons = ftok("consumer_file", 15);
