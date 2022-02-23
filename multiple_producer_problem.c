@@ -5,6 +5,7 @@
 #include<sys/msg.h>
 #include<string.h>
 #include<stdint.h>
+#include<semaphore.h>
 
 
 struct mesg_buffer{
@@ -12,6 +13,9 @@ struct mesg_buffer{
 	char mesg_text[100];
 };
 
+pthread_mutex_t mutex;
+sem_t empty;
+sem_t full;
 
 void* producer_func(void* threadid){
 	struct mesg_buffer message_prod;
@@ -26,6 +30,8 @@ void* producer_func(void* threadid){
 	msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 	while(1){
+		sem_wait(&empty);
+		pthread_mutex_lock(&mutex);
 		if(msgrcv(msg_id_cons, &message_cons, sizeof(message_cons), 0, 0) < 0 ){
 			printf("Error receiving message from consumer\n");
 			exit(EXIT_FAILURE);
@@ -39,6 +45,8 @@ void* producer_func(void* threadid){
 			printf("Error sending message to the consumer\n");
 			exit(EXIT_FAILURE);
 		}
+		pthread_mutex_unlock(&mutex);
+		sem_post(&full);
 	}
 	return 0;
 }
@@ -70,12 +78,14 @@ void* consumer_func(void* threadid){
         printf("Consumer-%lu(%d): Resource request sent\n",pthread_self()%10000,tid);
 
 	while(1){
+		sem_wait(&full);
+		pthread_mutex_lock(&mutex);
         	printf("Consumer-%lu(%d): Waiting for resource\n",pthread_self()%10000,tid);
         	if(msgrcv(msg_id_prod, &message_prod, sizeof(message_prod),1, 0) < 0 ){
         		fprintf(stderr,"Error receiving the message from producer\n");
 			exit(EXIT_FAILURE);
 		}
-
+		
 		printf("Consumer-%lu(%d): Resource received from producer and hence printing the message - %s\n",pthread_self()%10000,tid,message_prod.mesg_text);
 		
 		printf("Consumer-%lu(%d): Sending another request\n",pthread_self()%10000,tid);
@@ -83,6 +93,8 @@ void* consumer_func(void* threadid){
                         printf("Error sending message to producer\n");
                         exit(EXIT_FAILURE);
                 }
+		pthread_mutex_unlock(&mutex);
+		sem_post(&empty);
 	}
         return 0;
 }
@@ -90,6 +102,10 @@ void* consumer_func(void* threadid){
 
 int main(){
 	
+	pthread_mutex_init(&mutex,NULL);
+	sem_init(&empty,0,4);
+	sem_init(&full,0,0);
+
 	int msg_id_prod, msg_id_cons;
 	key_t key_prod, key_cons;
 	key_cons = ftok("consumer_file", 15);
