@@ -86,7 +86,7 @@ void* consumer_func(void* threadid){
 			exit(EXIT_FAILURE);
 		}
 		
-		printf("Consumer-%lu(%d): Resource received from producer and hence printing the message - %s\n",pthread_self()%10000,tid,message_prod.mesg_text);
+		printf("Consumer-%lu(%d): Resource received from producer and hence printing the message - %s",pthread_self()%10000,tid,message_prod.mesg_text);
 		
 		printf("Consumer-%lu(%d): Sending another request\n",pthread_self()%10000,tid);
 		if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
