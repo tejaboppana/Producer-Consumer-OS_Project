@@ -27,7 +27,7 @@ sem_t full;
 // producer function
 void* producer_func(void* threadid){
 	struct mesg_buffer message_prod;
-	message_prod.mesg_type = 1;
+	message_prod.mesg_type = 1; // message type for producer
 
 	struct mesg_buffer message_cons;
 	key_t key_prod, key_cons;
@@ -39,28 +39,29 @@ void* producer_func(void* threadid){
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 	int count = 0;
 	while(count < LOOP_SIZE){                   
-		sem_wait(&empty);                       // producer is allowed to 
+		sem_wait(&empty);                       // Producer can provide the resource only if there are empty slots 
 		pthread_mutex_lock(&mutex);
-		if(msgrcv(msg_id_cons, &message_cons, sizeof(message_cons), 0, 0) < 0 ){
+		if(msgrcv(msg_id_cons, &message_cons, sizeof(message_cons), 0, 0) < 0 ){ // receiving request from consumers
 			printf("Error receiving message from consumer\n");
 			exit(EXIT_FAILURE);
 		}
 		printf("Producer-%d(%lu): Resource request received from consumer %s\n",tid,pthread_self()%10000,message_cons.mesg_text);	
 		
-		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"Message from producer - %d(%lu)\n",tid,pthread_self()%10000);
+		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"Message from producer - %d(%lu)\n",tid,pthread_self()%10000);// creating a message , which would logically mean a resource is being provided to the consumer
 		printf("Producer-%d(%lu): Sending acknowledgement\n",tid,pthread_self()%10000);
 
-		if(msgsnd(msg_id_prod, &message_prod, sizeof(message_prod), 0) < 0){
+		if(msgsnd(msg_id_prod, &message_prod, sizeof(message_prod), 0) < 0){  // acknowledging the request and sending the resource
 			printf("Error sending message to the consumer\n");
 			exit(EXIT_FAILURE);
 		}
-		pthread_mutex_unlock(&mutex);
+		pthread_mutex_unlock(&mutex); // release the mutex lock 
 		sem_post(&full);
 		count++;
 	}
 	return 0;
 }
 
+// Consumer function
 void* consumer_func(void* threadid){
 	struct mesg_buffer message_prod;
 
@@ -78,32 +79,32 @@ void* consumer_func(void* threadid){
         msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 
-        snprintf(message_cons.mesg_text,sizeof(message_cons.mesg_text),"%lu",pthread_self()%10000);
-        if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
+        snprintf(message_cons.mesg_text,sizeof(message_cons.mesg_text),"%lu",pthread_self()%10000); // Creating the resource request
+        if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){  // Resource request sent by the consumer
                printf("Error sending message to producer\n");
                exit(EXIT_FAILURE);
-        }
+        } 
 
         printf("Consumer-%d(%lu): Resource request sent\n",tid,pthread_self()%10000);
 	int count = 0;
 	while(count < LOOP_SIZE){
-		sem_wait(&full);
+		sem_wait(&full);          // critical section for the consumer 
 		pthread_mutex_lock(&mutex);
         	printf("Consumer-%d(%lu): Waiting for resource\n",tid,pthread_self()%10000);
-        	if(msgrcv(msg_id_prod, &message_prod, sizeof(message_prod),1, 0) < 0 ){
+        	if(msgrcv(msg_id_prod, &message_prod, sizeof(message_prod),1, 0) < 0 ){ // receives acnowedgement from the producer and gets the access to  resource
         		fprintf(stderr,"Error receiving the message from producer\n");
 			exit(EXIT_FAILURE);
 		}
 		
-		printf("Consumer-%d(%lu): Resource received from producer - %s",tid,pthread_self()%10000,message_prod.mesg_text);
+		printf("Consumer-%d(%lu): Resource received from producer - %s",tid,pthread_self()%10000,message_prod.mesg_text); // prints the message which is equivalent to using the resource 
 		
 		printf("Consumer-%d(%lu): Sending another request\n",tid,pthread_self()%10000);
-		if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
+		if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){ // Once the resource is utilized , sends another request for resource
                         printf("Error sending message to producer\n");
                         exit(EXIT_FAILURE);
                 }
 		pthread_mutex_unlock(&mutex);
-		sem_post(&empty);
+		sem_post(&empty);  // end of critical section
 		count++;
 	}
         return 0;
