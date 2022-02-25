@@ -7,6 +7,8 @@
 #include<stdint.h>
 #include<semaphore.h>
 #include<signal.h>
+#include<time.h>
+#include<unistd.h>
 
 #define NUM_USERS 4  // Number of producer-consumer pairs
 #define BUFFER_SIZE 4 // Number of resources that can be accessed at a time
@@ -38,6 +40,13 @@ void* producer_func(void* threadid){
 	msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 	int count = 0;
+
+	time_t cur_time;
+	struct tm* timeinfo;
+
+	time(&cur_time);
+	timeinfo = localtime(&cur_time);
+
 	while(count < LOOP_SIZE){                   
 		sem_wait(&empty);                       // Producer can provide the resource only if there are empty slots 
 		pthread_mutex_lock(&mutex);
@@ -46,14 +55,21 @@ void* producer_func(void* threadid){
 			exit(EXIT_FAILURE);
 		}
 		printf("Producer-%d(%lu): Resource request received from consumer %s\n",tid,pthread_self()%10000,message_cons.mesg_text);	
-		
-		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"Message from producer - %d(%lu)\n",tid,pthread_self()%10000);// creating a message , which would logically mean a resource is being provided to the consumer
+        	sleep(1);
+		time_t cur_time;
+        	struct tm* timeinfo;
+
+        	time(&cur_time);
+        	timeinfo = localtime(&cur_time);	
+
+		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"%s: Message from producer - %d(%lu)\n",asctime(timeinfo),tid,pthread_self()%10000);// creating a message , which would logically mean a resource is being provided to the consumer
 		printf("Producer-%d(%lu): Sending acknowledgement\n",tid,pthread_self()%10000);
 
 		if(msgsnd(msg_id_prod, &message_prod, sizeof(message_prod), 0) < 0){  // acknowledging the request and sending the resource
 			printf("Error sending message to the consumer\n");
 			exit(EXIT_FAILURE);
 		}
+		sleep(1);
 		pthread_mutex_unlock(&mutex); // release the mutex lock 
 		sem_post(&full);
 		count++;
@@ -85,6 +101,7 @@ void* consumer_func(void* threadid){
                exit(EXIT_FAILURE);
         } 
 
+	sleep(1);
         printf("Consumer-%d(%lu): Resource request sent\n",tid,pthread_self()%10000);
 	int count = 0;
 	while(count < LOOP_SIZE){
@@ -97,12 +114,13 @@ void* consumer_func(void* threadid){
 		}
 		
 		printf("Consumer-%d(%lu): Resource received from producer - %s",tid,pthread_self()%10000,message_prod.mesg_text); // prints the message which is equivalent to using the resource 
-		
+		sleep(1);
 		printf("Consumer-%d(%lu): Sending another request\n",tid,pthread_self()%10000);
 		if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){ // Once the resource is utilized , sends another request for resource
                         printf("Error sending message to producer\n");
                         exit(EXIT_FAILURE);
                 }
+		sleep(1);
 		pthread_mutex_unlock(&mutex);
 		sem_post(&empty);  // end of critical section
 		count++;
