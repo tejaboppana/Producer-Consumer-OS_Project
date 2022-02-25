@@ -25,8 +25,8 @@ void* producer_func(void* threadid){
 	key_t key_prod, key_cons;
 	int msg_id_prod, msg_id_cons;
 	int tid = (intptr_t)threadid;
-	key_cons = ftok("consumer_file", 15);
-	key_prod = ftok("producer_file", 96);
+	key_cons = ftok("consumer", 15);
+	key_prod = ftok("producer", 96);
 	msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 	while(1){
@@ -36,10 +36,10 @@ void* producer_func(void* threadid){
 			printf("Error receiving message from consumer\n");
 			exit(EXIT_FAILURE);
 		}
-		printf("Producer-%lu(%d): Resource request received from consumer %s\n",pthread_self()%10000,tid,message_cons.mesg_text);	
+		printf("Producer-%d(%lu): Resource request received from consumer %s\n",tid,pthread_self()%10000,message_cons.mesg_text);	
 		
-		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"Message from producer - %d, Thread ID - %lu\n",tid,pthread_self()%10000);
-		printf("Producer-%lu(%d): Sending acknowledgement\n",pthread_self()%10000,tid);
+		snprintf(message_prod.mesg_text,sizeof(message_prod.mesg_text),"Message from producer - %d(%lu)\n",tid,pthread_self()%10000);
+		printf("Producer-%d(%lu): Sending acknowledgement\n",tid,pthread_self()%10000);
 
 		if(msgsnd(msg_id_prod, &message_prod, sizeof(message_prod), 0) < 0){
 			printf("Error sending message to the consumer\n");
@@ -62,33 +62,32 @@ void* consumer_func(void* threadid){
         int msg_id_prod, msg_id_cons;
         int tid = (intptr_t)threadid;
 
-        key_cons = ftok("consumer_file", 15);
-        key_prod = ftok("producer_file", 96);
+        key_cons = ftok("consumer", 15);
+        key_prod = ftok("producer", 96);
 
         msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 
         snprintf(message_cons.mesg_text,sizeof(message_cons.mesg_text),"%lu",pthread_self()%10000);
-
         if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
                printf("Error sending message to producer\n");
                exit(EXIT_FAILURE);
         }
 
-        printf("Consumer-%lu(%d): Resource request sent\n",pthread_self()%10000,tid);
+        printf("Consumer-%d(%lu): Resource request sent\n",tid,pthread_self()%10000);
 
 	while(1){
 		sem_wait(&full);
 		pthread_mutex_lock(&mutex);
-        	printf("Consumer-%lu(%d): Waiting for resource\n",pthread_self()%10000,tid);
+        	printf("Consumer-%d(%lu): Waiting for resource\n",tid,pthread_self()%10000);
         	if(msgrcv(msg_id_prod, &message_prod, sizeof(message_prod),1, 0) < 0 ){
         		fprintf(stderr,"Error receiving the message from producer\n");
 			exit(EXIT_FAILURE);
 		}
 		
-		printf("Consumer-%lu(%d): Resource received from producer and hence printing the message - %s",pthread_self()%10000,tid,message_prod.mesg_text);
+		printf("Consumer-%d(%lu): Resource received from producer - %s",tid,pthread_self()%10000,message_prod.mesg_text);
 		
-		printf("Consumer-%lu(%d): Sending another request\n",pthread_self()%10000,tid);
+		printf("Consumer-%d(%lu): Sending another request\n",tid,pthread_self()%10000);
 		if(msgsnd(msg_id_cons, &message_cons,sizeof(message_cons),0) < 0){
                         printf("Error sending message to producer\n");
                         exit(EXIT_FAILURE);
@@ -105,12 +104,19 @@ int main(){
 	pthread_mutex_init(&mutex,NULL);
 	sem_init(&empty,0,4);
 	sem_init(&full,0,0);
+        
+
+	//Creating files that are used for creation of the keys
+	FILE* p;  
+	p = fopen("consumer","w+");
+	FILE* c ;
+        c = fopen("producer","w+");
 
 	// Initialization of message queues, one for producers and one for consumers 
 	int msg_id_prod, msg_id_cons;
 	key_t key_prod, key_cons;
-	key_cons = ftok("consumer_file", 15);
-        key_prod = ftok("producer_file", 96);
+	key_cons = ftok("consumer", 15);
+        key_prod = ftok("producer", 96);
         msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
 
@@ -143,5 +149,7 @@ int main(){
 
 	msgctl(msg_id_cons, IPC_RMID, NULL);
 	msgctl(msg_id_prod, IPC_RMID, NULL);
+	fclose(p);
+	fclose(c);
 	return 0;
 }
