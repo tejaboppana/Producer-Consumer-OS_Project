@@ -6,17 +6,25 @@
 #include<string.h>
 #include<stdint.h>
 #include<semaphore.h>
+#include<signal.h>
 
+#define NUM_USERS 4  // Number of producer-consumer pairs
+#define BUFFER_SIZE 4 // Number of resources that can be accessed at a time
+#define LOOP_SIZE 10 // Number of times each consumer and producer run
 
+//Message structure which contains the text and the type of message to disinguish the producer and consumer messages
 struct mesg_buffer{
 	long mesg_type;
 	char mesg_text[100];
 };
 
+// Initiialization of mutex and semaphore
 pthread_mutex_t mutex;
 sem_t empty;
 sem_t full;
 
+
+// producer function
 void* producer_func(void* threadid){
 	struct mesg_buffer message_prod;
 	message_prod.mesg_type = 1;
@@ -29,8 +37,9 @@ void* producer_func(void* threadid){
 	key_prod = ftok("producer", 96);
 	msg_id_cons = msgget(key_cons, 0666 | IPC_CREAT);
 	msg_id_prod = msgget(key_prod, 0666 | IPC_CREAT);
-	while(1){
-		sem_wait(&empty);
+	int count = 0;
+	while(count < LOOP_SIZE){                   
+		sem_wait(&empty);                       // producer is allowed to 
 		pthread_mutex_lock(&mutex);
 		if(msgrcv(msg_id_cons, &message_cons, sizeof(message_cons), 0, 0) < 0 ){
 			printf("Error receiving message from consumer\n");
@@ -47,6 +56,7 @@ void* producer_func(void* threadid){
 		}
 		pthread_mutex_unlock(&mutex);
 		sem_post(&full);
+		count++;
 	}
 	return 0;
 }
@@ -75,8 +85,8 @@ void* consumer_func(void* threadid){
         }
 
         printf("Consumer-%d(%lu): Resource request sent\n",tid,pthread_self()%10000);
-
-	while(1){
+	int count = 0;
+	while(count < LOOP_SIZE){
 		sem_wait(&full);
 		pthread_mutex_lock(&mutex);
         	printf("Consumer-%d(%lu): Waiting for resource\n",tid,pthread_self()%10000);
@@ -94,22 +104,23 @@ void* consumer_func(void* threadid){
                 }
 		pthread_mutex_unlock(&mutex);
 		sem_post(&empty);
+		count++;
 	}
         return 0;
 }
 
 
+
 int main(){
         // Defined mutex and semaphores	
 	pthread_mutex_init(&mutex,NULL);
-	sem_init(&empty,0,4);
+	sem_init(&empty,0,BUFFER_SIZE);
 	sem_init(&full,0,0);
-        
-
+ 
 	//Creating files that are used for creation of the keys
-	FILE* p;  
+	FILE* p;
+	FILE* c;
 	p = fopen("consumer","w+");
-	FILE* c ;
         c = fopen("producer","w+");
 
 	// Initialization of message queues, one for producers and one for consumers 
@@ -126,30 +137,39 @@ int main(){
 	int i;
 
 	// Creation of threads
-	for(i = 0; i < 4; i++){
+	for(i = 0; i < NUM_USERS; i++){
 		pthread_create(&prod_threads[i], NULL, producer_func, (void *)(i+1));
 	}
 
-	for(i = 0; i < 4; i++){
+	for(i = 0; i < NUM_USERS; i++){
 		pthread_create(&cons_threads[i], NULL, consumer_func,(void *)(i+1));
 	}
-
-	for(i = 0; i < 4; i++){
+       
+	for(i = 0; i < NUM_USERS; i++){
 		pthread_join(prod_threads[i], NULL);
 	}
 
-	for(i = 0; i < 4; i++){
+	for(i = 0; i < NUM_USERS; i++){
 	       pthread_join(cons_threads[i], NULL);
       	}	       
 	
 	// Destroying the mutex, semaphore variables and the message queues
+	printf("Destroying the resources\n");
 	pthread_mutex_destroy(&mutex);
 	sem_destroy(&empty);
 	sem_destroy(&full);
 
-	msgctl(msg_id_cons, IPC_RMID, NULL);
-	msgctl(msg_id_prod, IPC_RMID, NULL);
+	if(msgctl(msg_id_cons, IPC_RMID, NULL) == 0){
+		printf("Successfuly deleted consumer queue\n");
+	}
+
+	if(msgctl(msg_id_prod, IPC_RMID, NULL) == 0){
+		printf("Successfully deleted producer queue\n");
+	}
+
 	fclose(p);
+	remove("producer");
 	fclose(c);
+	remove("consumer");
 	return 0;
 }
